@@ -1,8 +1,7 @@
 # OptimismTemplate
-Simple template to get started working with Optimism
+Simple template to get started example of working with Optimism
 
-NOTE: WIP.
-ERC20 cross messaging not working at the moment.
+NOTE: WIP
 
 ## SETUP Local Environment
 The first thing is to setup your enviroment to run your local l1 and l2 chains
@@ -102,6 +101,114 @@ value = await storageServiceL2.ValueQueryAsync();
 Assert.Equal("3e4cfaa8730092552d9425575e49bb542e329982000000000000000000000000", value.ToHex());
 ```
 
+## Token bridge L1 to L2
+
+```csharp
+            var ourAdddress = "0x023ffdc1530468eb8c8eebc3e38380b5bc19cc5d";
+            var web3l1 = new Web3(new Account("0x754fde3f5e60ef2c7649061e06957c29017fe21032a8017132c0078e37f6193a", 31337), "http://localhost:9545");
+            var web3l2 = new Web3(new Account("0x754fde3f5e60ef2c7649061e06957c29017fe21032a8017132c0078e37f6193a", 420), "http://localhost:8545");
+ 
+            var addressManagerService = new AddressManagerService(web3l1, ADDRESS_MANAGER);
+            var OVM_L2CrossDomainMessenger = await addressManagerService.GetAddressQueryAsync("OVM_L2CrossDomainMessenger");
+            var Proxy__OVM_L1CrossDomainMessenger = await addressManagerService.GetAddressQueryAsync("Proxy__OVM_L1CrossDomainMessenger");
+
+
+            var tokenName = "OPNETH";
+            var tokenSymbol = "OPNETH";
+
+            var erc20TokenDeployment = new ERC20Deployment() { Name = tokenName, InitialSupply = Web3.Convert.ToWei(1000000000000000000), Symbol = tokenSymbol, Decimals = 18};
+
+            //Deploy our custom token
+            var tokenDeploymentReceipt = await ERC20Service.DeployContractAndWaitForReceiptAsync(web3l1, erc20TokenDeployment);
+
+            //Deploy our ERC20 contract deployed
+            var ovmL2DepositedERC20 = new L2DepositedERC20Deployment() { L2CrossDomainMessenger = OVM_L2CrossDomainMessenger, Name = tokenName, Symbol = tokenSymbol, Decimals = 18 };
+
+            var ovmL2DepositedERC20Receipt = await L2DepositedERC20Service.DeployContractAndWaitForReceiptAsync(web3l2, ovmL2DepositedERC20);
+
+            var ovmL1ERC20Gateway = new L1ERC20GatewayDeployment() { L2DepositedERC20 = ovmL2DepositedERC20Receipt.ContractAddress, L1ERC20 = tokenDeploymentReceipt.ContractAddress, L1messenger = Proxy__OVM_L1CrossDomainMessenger };
+
+            var ovmL1ERC20GatewayReceipt = await L1ERC20GatewayService.DeployContractAndWaitForReceiptAsync(web3l1, ovmL1ERC20Gateway);
+
+            //Creating a new service
+            var tokenService = new ERC20Service(web3l1, tokenDeploymentReceipt.ContractAddress);
+
+            var gatewayService = new L1ERC20GatewayService(web3l1, ovmL1ERC20GatewayReceipt.ContractAddress);
+            var l2DepositedService = new L2DepositedERC20Service(web3l2, ovmL2DepositedERC20Receipt.ContractAddress);
+            //don't forget to init the l2DepositService
+            await l2DepositedService.InitRequestAndWaitForReceiptAsync(ovmL1ERC20GatewayReceipt.ContractAddress);
+            
+            var balancesInL1 = await tokenService.BalanceOfQueryAsync(ourAdddress);
+            var receiptApproval = await tokenService.ApproveRequestAndWaitForReceiptAsync(gatewayService.ContractHandler.ContractAddress, 100000);
+            var receiptDeposit = await gatewayService.DepositRequestAndWaitForReceiptAsync(new DepositFunction() { Amount = 100000, Gas= 8000000 });
+
+            balancesInL1 = await tokenService.BalanceOfQueryAsync(ourAdddress);
+            //what the watcher does.. we do already have the txn receipt.. but for demo purpouses
+            var messageHashes = GetMessageHashes(receiptDeposit);
+
+            var txnReceipt = await GetMessageTransactionReceipt(web3l2, OVM_L2CrossDomainMessenger, messageHashes.First());
+
+            var balancesInL2 = await l2DepositedService.BalanceOfQueryAsync(ourAdddress);
+
+```
+## NFT sample ERC721
+The template includes MyERC721 which is compatible with Optimism (OpenZeppelin Address does not use balance or call with value), also it has been made sure is not too big (not pause features) to exceed the 24k.
+
+The test / sample deploys the contract, publish the image to ipfs, creates the metadata and finally mints it. Overall the same steps that as in L1 (a part from above)
+
+```csharp
+   var web3l2 = new Web3(new Account("0x754fde3f5e60ef2c7649061e06957c29017fe21032a8017132c0078e37f6193a", 420), "http://localhost:8545");
+            var ourAdddress = "0x023ffdc1530468eb8c8eebc3e38380b5bc19cc5d";
+            var myERC721Deployment = new MyERC721Deployment()
+            {
+                BaseURI = "https://ipfs.io/ipfs/",
+                Name = "OPTNETNFTS",
+                Symbol = "OPTNETH",
+                Gas = 7000000
+            };
+
+            var receipt = await MyERC721Service.DeployContractAndWaitForReceiptAsync(web3l2, myERC721Deployment);
+
+            var byteCode = await web3l2.Eth.GetCode.SendRequestAsync(receipt.ContractAddress);
+
+            var service = new MyERC721Service(web3l2, receipt.ContractAddress);
+            var imageNode = await AddImageToIpfs("Images/image1.png");
+            var metadataNode = await AddNftsMetadataToIpfs(new NftMetadata()
+                { Name = "NethereumLovesOptimism", ExternalUrl = "https://github.com/Nethereum/OptimismTemplate/", Image = "https://ipfs.infura.io/ipfs/" + imageNode.Id.ToString() });
+
+            var receiptMint = await service.MintRequestAndWaitForReceiptAsync(ourAdddress, metadataNode.Id.ToString());
+            var mintedInfo = receiptMint
+                .DecodeAllEvents<OptimismTemplate.Contracts.MyERC721.ContractDefinition.TransferEventDTO>().FirstOrDefault();
+
+
+            var tokenMetadataUri = await service.TokenURIQueryAsync(mintedInfo.Event.TokenId);
+
+            var client = new WebClient();
+
+            var nftMetadataJson = await client.DownloadStringTaskAsync(new Uri(tokenMetadataUri));
+
+            var nftMetadata = JsonConvert.DeserializeObject<NftMetadata>(nftMetadataJson);
+
+            Assert.Equal("https://ipfs.infura.io/ipfs/" + imageNode.Id.ToString(), nftMetadata.Image);
+
+            var ps = new ProcessStartInfo(nftMetadata.Image)
+            {
+                UseShellExecute = true,
+                Verb = "open"
+            };
+            Process.Start(ps);
+
+```
+When you run this sample, you will see your browser open the NFT image:
+
+![image](https://user-images.githubusercontent.com/562371/112763780-d8b26580-8ffd-11eb-91a0-b4670d9434d0.png)
+
+
 ## Credits
 * The Optimism team! All based on the tutorials here https://github.com/ethereum-optimism/optimism-tutorial
 and integration tests https://github.com/ethereum-optimism/integration-tests/tree/master/contracts
+
+## TODO: 
++ Make a proper library for contract definitions, creating a submodule of optimism contracts (done ish)
++ helpers watchers in library (done ish)
++ Make a Deployment L1 Library
