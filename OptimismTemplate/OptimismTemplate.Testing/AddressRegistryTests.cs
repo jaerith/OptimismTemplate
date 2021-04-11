@@ -24,7 +24,7 @@ namespace OptimismTemplate.Testing
         {
             var encoder = new Bytes32TypeEncoder();
 
-            var web3l2 = new Web3(new Account("0x754fde3f5e60ef2c7649061e06957c29017fe21032a8017132c0078e37f6193a", 420), "localhost:8545");
+            var web3l2 = new Web3(new Account("0x754fde3f5e60ef2c7649061e06957c29017fe21032a8017132c0078e37f6193a", 420), "http://localhost:8545");
             var ourAdddress = "0x023ffdc1530468eb8c8eebc3e38380b5bc19cc5d";
 
             var myAddressRegistryDeployment = new L2AddressRegistryDeployment()
@@ -40,7 +40,7 @@ namespace OptimismTemplate.Testing
 
             RegisterAddressFunction registerFunction = new RegisterAddressFunction()
             {
-                FromAddress = "0x023ffdc1530468eb8c8eebc3e38380b5bc19cc5d",
+                RegContractAddress = "0x89205A3A3b2A69De6Dbf7f01ED13B2108B2c43e7",
                 ContractName = encoder.Encode(new String("AcmeCharityERC20")),
                 Gas = 7000000
             };
@@ -49,7 +49,7 @@ namespace OptimismTemplate.Testing
 
             var contractAddress = await service.GetAddressQueryAsync(encoder.Encode("AcmeCharityERC20"));
 
-            Assert.Equal("023ffdc1530468eb8c8eebc3e38380b5bc19cc5d", contractAddress);
+            Assert.Equal("0x89205A3A3b2A69De6Dbf7f01ED13B2108B2c43e7".ToLower(), contractAddress);
 
         }
 
