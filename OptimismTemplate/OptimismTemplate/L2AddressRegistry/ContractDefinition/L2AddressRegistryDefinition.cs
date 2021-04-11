@@ -95,7 +95,7 @@ namespace OptimismTemplate.Contracts.L2AddressRegistry.ContractDefinition
         [Parameter("bytes32", "contractName", 1)]
         public virtual byte[] ContractName { get; set; }
         [Parameter("address", "a", 2)]
-        public virtual string A { get; set; }
+        public virtual string RegContractAddress { get; set; }
     }
 
     public partial class RegisterAddressStringFunction : RegisterAddressStringFunctionBase { }

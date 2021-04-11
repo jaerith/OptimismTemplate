@@ -146,7 +146,7 @@ namespace OptimismTemplate.Contracts.L2AddressRegistry
         {
             var registerAddressFunction = new RegisterAddressFunction();
             registerAddressFunction.ContractName = contractName;
-            registerAddressFunction.A = a;
+            registerAddressFunction.RegContractAddress = a;
 
             return ContractHandler.SendRequestAsync(registerAddressFunction);
         }
@@ -155,7 +155,7 @@ namespace OptimismTemplate.Contracts.L2AddressRegistry
         {
             var registerAddressFunction = new RegisterAddressFunction();
             registerAddressFunction.ContractName = contractName;
-            registerAddressFunction.A = a;
+            registerAddressFunction.RegContractAddress = a;
 
             return ContractHandler.SendRequestAndWaitForReceiptAsync(registerAddressFunction, cancellationToken);
         }
